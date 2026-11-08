@@ -1,0 +1,34 @@
+# Dependencies and builds
+node_modules/
+desktop/out/
+desktop/dist/
+desktop/build/backend/
+desktop/resources/php/
+backend/vendor/
+
+# Local data and secrets
+.env
+.env.*
+!.env.example
+!desktop/.env.development.example
+!desktop/.env.production.example
+!deploy/.env.server.example
+backend/database/*.sqlite*
+backend/storage/*.key
+backend/storage/logs/*.log
+backend/storage/app/companies.json
+backend/storage/backups/
+backend/.phpunit.result.cache
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# License authority data and signing secrets
+backend/storage/app/control/
+backend/storage/framework/control-sessions/
+*.private.pem
+backend/storage/issuer-backups/
+*.mzb

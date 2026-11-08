@@ -1,0 +1,81 @@
+name: Verify ERP
+on: [push, pull_request]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        database: [sqlite, mysql]
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: manzoma_test
+          MYSQL_USER: manzoma_test
+          MYSQL_PASSWORD: testing-only
+          MYSQL_ROOT_PASSWORD: testing-root-only
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptesting-root-only"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_sqlite, pdo_mysql, bcmath, intl, zip, pcntl
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist
+        working-directory: backend
+      - name: Prepare isolated licensing databases
+        if: matrix.database == 'mysql'
+        working-directory: backend
+        env:
+          MYSQL_TEST_ROOT_PASSWORD: testing-root-only
+        run: |
+          php <<'PHP'
+          <?php
+          $db = new PDO("mysql:host=127.0.0.1;port=3306", "root", getenv("MYSQL_TEST_ROOT_PASSWORD"));
+          $db->exec("CREATE DATABASE IF NOT EXISTS erp_license_verification_ci");
+          $db->exec("GRANT ALL PRIVILEGES ON `erp\\_%`.* TO 'manzoma_test'@'%'");
+          PHP
+      - run: vendor/bin/phpunit --no-progress
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: ${{ matrix.database }}
+          DB_DATABASE: ${{ matrix.database == 'mysql' && 'manzoma_test' || ':memory:' }}
+          DB_HOST: 127.0.0.1
+          DB_USERNAME: manzoma_test
+          DB_PASSWORD: testing-only
+          ERP_MULTI_COMPANY: 'false'
+          CONTROL_TEST_MYSQL: ${{ matrix.database == 'mysql' && 'true' || 'false' }}
+          CONTROL_TEST_DATABASE: erp_license_verification_ci
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+        working-directory: desktop
+      - run: npm run verify:translations && npm run typecheck && npm test && npm run build
+        working-directory: desktop
+
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+        working-directory: desktop
+      - run: xvfb-run -a npm run verify:ui
+        working-directory: desktop

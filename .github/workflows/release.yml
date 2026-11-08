@@ -1,0 +1,60 @@
+name: Build signed desktop installers
+on:
+  workflow_dispatch:
+jobs:
+  installers:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            command: npm run dist:win
+          - os: macos-latest
+            command: npm run dist:mac -- --config.mac.notarize=true
+          - os: ubuntu-latest
+            command: npm run dist:linux
+    runs-on: ${{ matrix.os }}
+    env:
+      ERP_SERVER_URL: ${{ vars.ERP_SERVER_URL }}
+      ERP_LICENSE_SERVER_URL: ${{ vars.ERP_LICENSE_SERVER_URL }}
+      ERP_ISSUER_PUBLIC_KEY: ${{ vars.ERP_ISSUER_PUBLIC_KEY }}
+      CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_LINK || secrets.WINDOWS_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_KEY_PASSWORD || secrets.WINDOWS_CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_sqlite, pdo_mysql, bcmath, intl, zip
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: composer install --no-interaction --prefer-dist
+        working-directory: backend
+      - run: npm ci
+        working-directory: desktop
+      - name: Verify release trust and signing configuration
+        working-directory: desktop
+        run: node scripts/prepare-release.mjs
+      - run: npm run verify:translations && npm run typecheck && npm test
+        working-directory: desktop
+      - run: ${{ matrix.command }}
+        working-directory: desktop
+      - run: node scripts/verify-distribution.mjs
+        working-directory: desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.dmg
+            desktop/dist/*.deb
+            desktop/dist/*.AppImage
+            desktop/dist/SHA256SUMS
+          if-no-files-found: error

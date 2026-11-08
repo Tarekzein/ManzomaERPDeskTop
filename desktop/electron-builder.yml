@@ -1,0 +1,65 @@
+# Packaging for Windows (NSIS installer), Linux (AppImage, deb) and macOS (dmg).
+# `npm run dist` builds the app, stages the Laravel backend under build/backend
+# (production dependencies only) and bundles a static PHP runtime per platform.
+appId: com.manzomatech.erp.desktop
+productName: ManzomaERP Desktop
+copyright: Copyright © 2026 ManzomaTech
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/main/**
+  - out/preload/**
+  - out/renderer/**
+  - package.json
+  - resources/icon.png
+asar: true
+extraResources:
+  - from: resources/license-legacy-public-keys.json
+    to: license-legacy-public-keys.json
+  - from: resources/license-public-key.pem
+    to: license-public-key.pem
+  - from: build/backend
+    to: backend
+    filter:
+      - "**/*"
+# ManzomaTech "M" mark. icon.png follows the macOS 1024 grid (also used for Linux);
+# icon.ico is a tighter tile with 16–256px sizes so it stays legible in the Windows taskbar.
+icon: resources/icon.png
+afterPack: scripts/after-pack.cjs
+win:
+  icon: resources/icon.png
+  extraResources:
+    - from: resources/php/win32-${arch}
+      to: php
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: ManzomaERP-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  shortcutName: ManzomaERP
+  language: "1025"
+  installerLanguages: [ar_SA, en_US]
+  multiLanguageInstaller: true
+linux:
+  extraResources:
+    - from: resources/php/linux-${arch}
+      to: php
+  target: [AppImage, deb]
+  category: Office
+  maintainer: ManzomaTech
+  artifactName: ManzomaERP-${version}-${arch}.${ext}
+mac:
+  extraResources:
+    - from: resources/php/darwin-${arch}
+      to: php
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  category: public.app-category.business
+  artifactName: ManzomaERP-${version}-${arch}.${ext}
+publish: null
